@@ -11,140 +11,133 @@
 
 //Add rogue dep
 #include "rogue/utilities/Prbs.h"
-
+#include "rogue/interfaces/stream/TcpClient.h"
+#include "rogue/interfaces/stream/Slave.h"
+#include <rogue/Helpers.h>
 
 #endif
 //----------DOC-MARK-----BEG*DEC-----DOC-MARK----------
 class LdmxProducer : public eudaq::Producer {
-  public:
-  LdmxProducer(const std::string & name, const std::string & runcontrol);
-  void DoInitialise() override;
-  void DoConfigure() override;
-  void DoStartRun() override;
-  void DoStopRun() override;
-  void DoTerminate() override;
-  void DoReset() override;
-  void RunLoop() override;
+public:
+    LdmxProducer(const std::string & name, const std::string & runcontrol);
+    void DoInitialise() override;
+    void DoConfigure() override;
+    void DoStartRun() override;
+    void DoStopRun() override;
+    void DoTerminate() override;
+    void DoReset() override;
+    void RunLoop() override;
   
-  static const uint32_t m_id_factory = eudaq::cstr2hash("LdmxProducer");
+    static const uint32_t m_id_factory = eudaq::cstr2hash("LdmxProducer");
 private:
-  bool m_flag_ts;
-  bool m_flag_tg;
-  uint32_t m_plane_id;
-  FILE* m_file_lock;
-  std::chrono::milliseconds m_ms_busy;
-  bool m_exit_of_run;
+    bool m_flag_ts;
+    bool m_flag_tg;
+    uint32_t m_plane_id;
+    FILE* m_file_lock;
+    std::chrono::milliseconds m_ms_busy;
+    bool m_exit_of_run;
 
-  //The frames receiver
-  //--- At the moment it is a prbs receiver ---//
-  rogue::utilities::PrbsPtr m_prbs = rogue::utilities::Prbs::create();
 
+    
+    //--- The tcp client where to receive frames ---//
+    rogue::interfaces::stream::TcpClientPtr m_tcpClient;
+    std::string m_addr = "127.0.0.1";
+    int         m_port = 8000;
+
+    //--- The Prbs receiver ---//
+    //Placeholder for the real HGCAL slave --//
+    rogue::utilities::PrbsPtr m_prbs = rogue::utilities::Prbs::create();
+    
 };
 //----------DOC-MARK-----END*DEC-----DOC-MARK----------
 //----------DOC-MARK-----BEG*REG-----DOC-MARK----------
 namespace{
-  auto dummy0 = eudaq::Factory<eudaq::Producer>::
-    Register<LdmxProducer, const std::string&, const std::string&>(LdmxProducer::m_id_factory);
+    auto dummy0 = eudaq::Factory<eudaq::Producer>::
+        Register<LdmxProducer, const std::string&, const std::string&>(LdmxProducer::m_id_factory);
 }
 //----------DOC-MARK-----END*REG-----DOC-MARK----------
 //----------DOC-MARK-----BEG*CON-----DOC-MARK----------
 LdmxProducer::LdmxProducer(const std::string & name, const std::string & runcontrol)
-  :eudaq::Producer(name, runcontrol), m_file_lock(0), m_exit_of_run(false){  
+    :eudaq::Producer(name, runcontrol), m_file_lock(0), m_exit_of_run(false){  
 }
 //----------DOC-MARK-----BEG*INI-----DOC-MARK----------
 void LdmxProducer::DoInitialise(){
-  auto ini = GetInitConfiguration();
-  std::string lock_path = ini->Get("EX0_DEV_LOCK_PATH", "ex0lockfile.txt");
-  m_file_lock = fopen(lock_path.c_str(), "a");
+    auto ini = GetInitConfiguration();
+    std::string lock_path = ini->Get("EX0_DEV_LOCK_PATH", "ex0lockfile.txt");
+    m_file_lock = fopen(lock_path.c_str(), "a");
 #ifndef _WIN32
-  if(flock(fileno(m_file_lock), LOCK_EX|LOCK_NB)){ //fail
-    EUDAQ_THROW("unable to lock the lockfile: "+lock_path );
-  }
+    if(flock(fileno(m_file_lock), LOCK_EX|LOCK_NB)){ //fail
+        EUDAQ_THROW("unable to lock the lockfile: "+lock_path );
+    }
 #endif
+
+    
+    //Connection information to the remote rogue server
+    //Address and Port are obtained from external configuration
+ 
+    m_addr = ini->Get("LDMX_TCPCLIENT_ADDR","127.0.0.1");
+    m_port = ini->Get("LDMX_TCPCLIENT_PORT",9999);
+    
+    EUDAQ_INFO("Setting up TcpClient addr: " + m_addr +" port: " +std::to_string(m_port));
+
+    
+    m_tcpClient = rogue::interfaces::stream::TcpClient::create(m_addr,m_port);
+        
+    //Connect rogueStreamConnect(master, slave)
+    rogueStreamConnect(m_tcpClient, m_prbs);
+        
+    EUDAQ_INFO("Tcp stream connected to receiver...");
 }
 
 //----------DOC-MARK-----BEG*CONF-----DOC-MARK----------
 void LdmxProducer::DoConfigure(){
-  auto conf = GetConfiguration();
-  conf->Print(std::cout);
-  m_plane_id = conf->Get("EX0_PLANE_ID", 0);
-  m_ms_busy = std::chrono::milliseconds(conf->Get("EX0_DURATION_BUSY_MS", 1000));
-  m_flag_ts = conf->Get("EX0_ENABLE_TIMESTAMP", 0);
-  m_flag_tg = conf->Get("EX0_ENABLE_TRIGERNUMBER", 0);
-  if(!m_flag_ts && !m_flag_tg){
-    EUDAQ_WARN("Both Timestamp and TriggerNumber are disabled. Now, Timestamp is enabled by default");
-    m_flag_ts = false;
-    m_flag_tg = true;
-  }
-  
-  //Connection information to the remote rogue server
-
-
+    auto conf = GetConfiguration();
+    conf->Print(std::cout);
+    
+    //... Send the configuration to the hardware ...
+    
 }
 //----------DOC-MARK-----BEG*RUN-----DOC-MARK----------
 void LdmxProducer::DoStartRun(){
-  m_exit_of_run = false;
+    m_exit_of_run = false;
 }
 //----------DOC-MARK-----BEG*STOP-----DOC-MARK----------
 void LdmxProducer::DoStopRun(){
-  m_exit_of_run = true;
+    m_exit_of_run = true;
 }
 //----------DOC-MARK-----BEG*RST-----DOC-MARK----------
 void LdmxProducer::DoReset(){
-  m_exit_of_run = true;
-  if(m_file_lock){
+    m_exit_of_run = true;
+    if(m_file_lock){
 #ifndef _WIN32
-    flock(fileno(m_file_lock), LOCK_UN);
+        flock(fileno(m_file_lock), LOCK_UN);
 #endif
-    fclose(m_file_lock);
-    m_file_lock = 0;
-  }
-  m_ms_busy = std::chrono::milliseconds();
-  m_exit_of_run = false;
+        fclose(m_file_lock);
+        m_file_lock = 0;
+    }
+    m_ms_busy = std::chrono::milliseconds();
+    m_exit_of_run = false;
 }
 //----------DOC-MARK-----BEG*TER-----DOC-MARK----------
 void LdmxProducer::DoTerminate(){
-  m_exit_of_run = true;
-  if(m_file_lock){
-    fclose(m_file_lock);
-    m_file_lock = 0;
-  }
+    m_exit_of_run = true;
+    if(m_file_lock){
+        fclose(m_file_lock);
+        m_file_lock = 0;
+    }
 }
 //----------DOC-MARK-----BEG*LOOP-----DOC-MARK----------
 void LdmxProducer::RunLoop(){
-  auto tp_start_run = std::chrono::steady_clock::now();
-  uint32_t trigger_n = 0;
-  uint8_t x_pixel = 16;
-  uint8_t y_pixel = 16;
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<uint32_t> position(0, x_pixel*y_pixel-1);
-  std::uniform_int_distribution<uint32_t> signal(0, 255);
-  while(!m_exit_of_run){
-    auto ev = eudaq::Event::MakeUnique("Ex0Raw");
-    ev->SetTag("Plane ID", std::to_string(m_plane_id));
-    auto tp_trigger = std::chrono::steady_clock::now();
-    auto tp_end_of_busy = tp_trigger + m_ms_busy;
-    if(m_flag_ts){
-      std::chrono::nanoseconds du_ts_beg_ns(tp_trigger - tp_start_run);
-      std::chrono::nanoseconds du_ts_end_ns(tp_end_of_busy - tp_start_run);
-      ev->SetTimestamp(du_ts_beg_ns.count(), du_ts_end_ns.count());
-    }
-    if(m_flag_tg)
-      ev->SetTriggerN(trigger_n);
 
-    std::vector<uint8_t> hit(x_pixel*y_pixel, 0);
-    hit[position(gen)] = signal(gen);
-    std::vector<uint8_t> data;
-    data.push_back(x_pixel);
-    data.push_back(y_pixel);
-    data.insert(data.end(), hit.begin(), hit.end());
-    
-    uint32_t block_id = m_plane_id;
-    ev->AddBlock(block_id, data);
-    SendEvent(std::move(ev));
-    trigger_n++;
-    std::this_thread::sleep_until(tp_end_of_busy);
-  }
+    EUDAQ_INFO("In RunLoop() !!!");
+    int rx_counts = 0;
+    int i = 0;
+    while(!m_exit_of_run){
+        i+=1;
+        rx_counts  = m_prbs->getRxCount();
+        
+        if (i % 10000 == 0)
+            std::cout<<"rx_counts "<< rx_counts<<std::endl;
+    }
 }
 //----------DOC-MARK-----END*IMP-----DOC-MARK----------
