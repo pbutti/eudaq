@@ -4,6 +4,79 @@ set(${PROJECT_NAME}_VERSION_MINOR 4 )
 set(${PROJECT_NAME}_VERSION_PATCH 0 )
 
 cmake_minimum_required(VERSION 3.1 FATAL_ERROR)
+
+# Add support for building in conda environment
+#if (DEFINED ENV{CONDA_PREFIX})
+#  set(CMAKE_PREFIX_PATH "$ENV{CONDA_PREFIX}")
+#  link_directories($ENV{CONDA_PREFIX}/lib)
+#  include_directories($ENV{CONDA_PREFIX}/include)
+#endif()
+
+# -----------------------------------------------------------
+# \brief Find the rogue package and configure this build
+#        to use it.
+#
+#  In addition, this method removes a number of compiler
+#  flagss that rogue adds that interfer with the build types,
+#  namely -O2, -g, -fPIC.
+# -----------------------------------------------------------
+macro (setup_rogue)
+
+   if (DEFINED ENV{ROGUE_DIR})
+      set(Rogue_DIR $ENV{ROGUE_DIR}/lib)
+   else()
+      set(Rogue_DIR ${CMAKE_PREFIX_PATH}/lib)
+   endif()
+   find_package(Rogue)
+
+
+   # ------------------------------------------------
+   # Remove any inherited -O2 flag from the CXX flags
+   # ------------------------------------------------
+   if(NOT "${CMAKE_CXX_FLAGS}" STREQUAL "")
+      string(REPLACE -O2 "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+   endif ()
+
+
+   # ------------------------------------------------
+   # Remove any inherited -g flag from the CXX flags
+   # ------------------------------------------------
+   if(NOT "${CMAKE_CXX_FLAGS}" STREQUAL "")
+      string(REPLACE -g  "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+   endif ()
+
+
+   # ------------------------------------------------
+   # Remove any inherited -fPIC flag from the CXX flags
+   # ------------------------------------------------
+   if(NOT "${CMAKE_CXX_FLAGS}" STREQUAL "")
+      string(REPLACE -fPIC  "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+   endif ()
+
+
+   # --- message ("After removal CMAKE_CXX_FLAGS = ${CMAKE_CXX_FLAGS}")
+
+
+endmacro ()
+# --------------------------------------------------------
+
+
+# --------------------------------------------------------
+# \brief Diagnostic print of the rogue configuration 
+#        (directory, includes libraries)
+# --------------------------------------------------------
+function (print_rogue)
+
+   message ("ROGUE_DIR         : ${ROGUE_DIR}")
+   message ("ROGUE_INCLUDE_DIRS: ${ROGUE_INCLUDE_DIRS}")
+   message ("ROGUE_LIBRARIES   : ${ROGUE_LIBRARIES}")
+
+endfunction ()
+# --------------------------------------------------------
+
+  setup_rogue ()
+  print_rogue ()
+
 include(CMakeDependentOption)
 
 
