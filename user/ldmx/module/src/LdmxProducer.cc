@@ -14,6 +14,7 @@
 #include "rogue/interfaces/stream/TcpClient.h"
 #include "rogue/interfaces/stream/Slave.h"
 #include <rogue/Helpers.h>
+#include <TcpCommandMaster.hh>
 
 #endif
 //----------DOC-MARK-----BEG*DEC-----DOC-MARK----------
@@ -42,11 +43,16 @@ private:
     //--- The tcp client where to receive frames ---//
     rogue::interfaces::stream::TcpClientPtr m_tcpClient;
     std::string m_addr = "127.0.0.1";
-    int         m_port = 8000;
+    int         m_port = 9999;
 
     //--- The Prbs receiver ---//
     //Placeholder for the real HGCAL slave --//
     rogue::utilities::PrbsPtr m_prbs = rogue::utilities::Prbs::create();
+    
+
+    //--- The master for configuration ---//
+    TcpCommandMasterPtr m_tcp_cmd_master = TcpCommandMaster::create();
+    
     
 };
 //----------DOC-MARK-----END*DEC-----DOC-MARK----------
@@ -79,13 +85,16 @@ void LdmxProducer::DoInitialise(){
     m_port = ini->Get("LDMX_TCPCLIENT_PORT",9999);
     
     EUDAQ_INFO("Setting up TcpClient addr: " + m_addr +" port: " +std::to_string(m_port));
-
-    
     m_tcpClient = rogue::interfaces::stream::TcpClient::create(m_addr,m_port);
         
     //Connect rogueStreamConnect(master, slave)
+    //Connect the prbs slave via the tcp bridge
     rogueStreamConnect(m_tcpClient, m_prbs);
-        
+
+    //Connect the configuration master via the tcp bridge
+    rogueStreamConnect(m_tcp_cmd_master,m_tcpClient);
+
+    
     EUDAQ_INFO("Tcp stream connected to receiver...");
 }
 
@@ -93,8 +102,12 @@ void LdmxProducer::DoInitialise(){
 void LdmxProducer::DoConfigure(){
     auto conf = GetConfiguration();
     conf->Print(std::cout);
-    
+
     //... Send the configuration to the hardware ...
+    EUDAQ_INFO("Sending the configuration message...");
+    m_tcp_cmd_master->send_config_cmd();
+    EUDAQ_INFO("config sent");
+    //Check if the configuration message has been correctly received
     
 }
 //----------DOC-MARK-----BEG*RUN-----DOC-MARK----------
@@ -135,9 +148,8 @@ void LdmxProducer::RunLoop(){
     while(!m_exit_of_run){
         i+=1;
         rx_counts  = m_prbs->getRxCount();
-        
-        if (i % 10000 == 0)
-            std::cout<<"rx_counts "<< rx_counts<<std::endl;
+        auto evtprbs = eudaq::Event::MakeUnique("LdmxPrbsEvent");
+                
     }
 }
 //----------DOC-MARK-----END*IMP-----DOC-MARK----------
