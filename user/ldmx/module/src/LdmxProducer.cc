@@ -93,7 +93,7 @@ void LdmxProducer::DoInitialise(){
 
     //Connect the configuration master via the tcp bridge
     rogueStreamConnect(m_tcp_cmd_master,m_tcpClient);
-
+    
     
     EUDAQ_INFO("Tcp stream connected to receiver...");
 }
@@ -105,17 +105,22 @@ void LdmxProducer::DoConfigure(){
 
     //... Send the configuration to the hardware ...
     EUDAQ_INFO("Sending the configuration message...");
-    m_tcp_cmd_master->send_config_cmd();
+    std::string cmd = "configure";
+    m_tcp_cmd_master->send_cmd(cmd);
     EUDAQ_INFO("config sent");
     //Check if the configuration message has been correctly received
     
 }
 //----------DOC-MARK-----BEG*RUN-----DOC-MARK----------
 void LdmxProducer::DoStartRun(){
+
+    EUDAQ_INFO("Starting the run...");
     m_exit_of_run = false;
+    m_tcp_cmd_master->send_cmd("run");
 }
 //----------DOC-MARK-----BEG*STOP-----DOC-MARK----------
 void LdmxProducer::DoStopRun(){
+    m_tcp_cmd_master->send_cmd("stop");
     m_exit_of_run = true;
 }
 //----------DOC-MARK-----BEG*RST-----DOC-MARK----------

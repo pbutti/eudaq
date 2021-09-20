@@ -18,7 +18,7 @@ public:
     TcpCommandMaster();
     ~TcpCommandMaster();
 
-    void send_config_cmd();
+    void send_cmd(const std::string& cmd);
 };
 
 typedef std::shared_ptr<TcpCommandMaster> TcpCommandMasterPtr;
