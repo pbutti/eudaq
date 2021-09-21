@@ -185,8 +185,9 @@ void LdmxProducer::RunLoop(){
     EUDAQ_INFO(" Rx bandwidth    :" + std::to_string(m_prbs->getRxBw()));
     EUDAQ_INFO(" Rx Errors       :" + std::to_string(m_prbs->getRxErrors()));
     EUDAQ_INFO(" Rx Bytes        :" + std::to_string(m_prbs->getRxBytes()));
+    EUDAQ_INFO(" Written Frames  :" + std::to_string(m_fwrite->getFrameCount()));
     m_prbs->resetCount();
-
+    
     
 }
 //----------DOC-MARK-----END*IMP-----DOC-MARK----------
