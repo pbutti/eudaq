@@ -14,7 +14,12 @@
 #include "rogue/interfaces/stream/TcpClient.h"
 #include "rogue/interfaces/stream/Slave.h"
 #include <rogue/Helpers.h>
+#include <rogue/utilities/fileio/StreamWriter.h>
+#include <rogue/utilities/fileio/StreamWriterChannel.h>
+
+//Action server
 #include <TcpCommandMaster.hh>
+
 
 #endif
 //----------DOC-MARK-----BEG*DEC-----DOC-MARK----------
@@ -52,7 +57,10 @@ private:
 
     //--- The master for configuration ---//
     TcpCommandMasterPtr m_tcp_cmd_master = TcpCommandMaster::create();
-    
+
+
+    //--- File writer ---//
+    rogue::utilities::fileio::StreamWriterPtr m_fwrite;
     
 };
 //----------DOC-MARK-----END*DEC-----DOC-MARK----------
@@ -93,9 +101,24 @@ void LdmxProducer::DoInitialise(){
 
     //Connect the configuration master via the tcp bridge
     rogueStreamConnect(m_tcp_cmd_master,m_tcpClient);
-    
-    
+   
     EUDAQ_INFO("Tcp stream connected to receiver...");
+
+
+    //Create the file writer
+    // First we create a file writer instance
+    m_fwrite = rogue::utilities::fileio::StreamWriter::create();
+    //-- Make this configurable ---   /TODO TODO TODO
+    m_fwrite->setBufferSize(10000);
+    m_fwrite->setMaxSize(100000000);
+    m_fwrite->setDropErrors(false);
+    //Connect it to channel 0
+    rogueStreamConnect(m_tcpClient,m_fwrite->getChannel(0));
+    // Open the data file
+    std::string path_to_outFile = ini->Get("LDMX_OUTFILE_PATH","./");
+    std::string outFile_name    = ini->Get("LDMX_OUTFILE_NAME","myFile.dat");
+    m_fwrite->open(path_to_outFile+"/"+outFile_name);
+    
 }
 
 //----------DOC-MARK-----BEG*CONF-----DOC-MARK----------
@@ -122,6 +145,10 @@ void LdmxProducer::DoStartRun(){
 void LdmxProducer::DoStopRun(){
     m_tcp_cmd_master->send_cmd("stop");
     m_exit_of_run = true;
+    
+    //std::cout<<"Exit from run"<<std::endl;
+    m_fwrite->close();    
+    
 }
 //----------DOC-MARK-----BEG*RST-----DOC-MARK----------
 void LdmxProducer::DoReset(){
@@ -148,13 +175,18 @@ void LdmxProducer::DoTerminate(){
 void LdmxProducer::RunLoop(){
 
     EUDAQ_INFO("In RunLoop() !!!");
-    int rx_counts = 0;
-    int i = 0;
     while(!m_exit_of_run){
-        i+=1;
-        rx_counts  = m_prbs->getRxCount();
         auto evtprbs = eudaq::Event::MakeUnique("LdmxPrbsEvent");
-                
     }
+    EUDAQ_INFO("Out of RunLoop() !!!");
+    EUDAQ_INFO(" ## -- Run Summary -- ##");
+    EUDAQ_INFO(" Received frames :" + std::to_string(m_prbs->getRxCount()));
+    EUDAQ_INFO(" Rx rate         :" + std::to_string(m_prbs->getRxRate()));
+    EUDAQ_INFO(" Rx bandwidth    :" + std::to_string(m_prbs->getRxBw()));
+    EUDAQ_INFO(" Rx Errors       :" + std::to_string(m_prbs->getRxErrors()));
+    EUDAQ_INFO(" Rx Bytes        :" + std::to_string(m_prbs->getRxBytes()));
+    m_prbs->resetCount();
+
+    
 }
 //----------DOC-MARK-----END*IMP-----DOC-MARK----------
